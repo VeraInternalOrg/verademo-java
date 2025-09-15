@@ -106,6 +106,45 @@ pipeline {
                                     ./veracode scan --type directory --source . --format table
                                     '''
                             }
+                            else {
+                                powershell '''
+                                            Set-ExecutionPolicy AllSigned -Scope Process -Force
+                                            $ProgressPreference = "silentlyContinue"
+                                            iex ((New-Object System.Net.WebClient).DownloadString('https://tools.veracode.com/veracode-cli/install.ps1'))
+                                            $VERACODE_CLI = Get-Command veracode | Select-Object -ExpandProperty Definition
+                                            Write-Host "##vso[task.setvariable variable=VERACODE_CLI]$VERACODE_CLI"
+                                            # Check if MSBuild is already available in PATH
+                                            try {
+                                            $msbuildAlreadyExists = Get-Command msbuild.exe -ErrorAction SilentlyContinue
+                                            } catch {
+                                            $msbuildAlreadyExists = $false
+                                            }
+                                            Write-Host "MSBuild install check: $msbuildAlreadyExists"
+                                            if (-not $msbuildAlreadyExists) {
+                                            $vswherePath = "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe"
+                                                # Use a fallback check instead of Test-Path for broader compatibility
+                                            try {
+                                                if ([System.IO.File]::Exists($vswherePath)) {
+                                                Write-Host "vswherePath install check: $vswherePath"
+                                                $msbuildPath = & $vswherePath -latest -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe
+                                                if ($msbuildPath) {
+                                                    $msbuildDir = [System.IO.Path]::GetDirectoryName($msbuildPath)
+                                                    Write-Host "msbuildDir install check: $msbuildDir"
+                                                    #$env:PATH = $msbuildDir + ";" + $env:PATH
+                                                    if ($msbuildDir -and -not ($env:PATH.Split(";") | Where-Object { $_.TrimEnd('\\') -ieq $msbuildDir.TrimEnd('\\') })) {
+                                                    $env:PATH = $msbuildDir + ";" + $env:PATH
+                                                    Write-Host "msbuild path added: $env:PATH"
+                                                    }
+                                                }
+                                                }
+                                            } catch {
+                                                Write-Host "ProgressPreference catch block: $ProgressPreference"
+                                                # Silently ignore errors
+                                            }
+                                            }
+                                            & $VERACODE_CLI scan --type directory --source . --format table
+                                            '''
+                            }
                         }
                     }
             }
