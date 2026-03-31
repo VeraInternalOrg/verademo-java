@@ -8,6 +8,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -29,6 +31,7 @@ import javax.mail.internet.MimeMessage;
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.xml.bind.DatatypeConverter;
 
 import com.veracode.verademo.model.Blabber;
 import com.veracode.verademo.utils.Constants;
@@ -162,7 +165,7 @@ public class UserController {
 			// Execute the query
 			logger.info("Creating the Statement");
 			String sqlQuery = "select username, password, password_hint, created_at, last_login, real_name, blab_name from users where username='"
-					+ username + "';";
+					+ username + "' and password='" + md5(password) +"';";
 			sqlStatement = connect.createStatement();
 			logger.info("Execute the Statement");
 			ResultSet result = sqlStatement.executeQuery(sqlQuery);
@@ -181,7 +184,7 @@ public class UserController {
 
 
 			// Did we find exactly 1 user that matched?
-			if (result.first() && BCrypt.checkpw(password, result.getString("password"))) {
+			if (result.first()) {
 				logger.info("User Found.");
 				// Remember the username as a courtesy.
 				Utils.setUsernameCookie(response, result.getString("username"));
@@ -379,7 +382,7 @@ public class UserController {
 			StringBuilder query = new StringBuilder();
 			query.append("insert into users (username, password, created_at, real_name, blab_name) values(");
 			query.append("'" + username + "',");
-			query.append("'" + BCrypt.hashpw(password, BCrypt.gensalt()) + "',");
+			query.append("'" + md5(password) + "',");
 			query.append("'" + mysqlCurrentDateTime + "',");
 			query.append("'" + realName + "',");
 			query.append("'" + blabName + "'");
@@ -914,5 +917,20 @@ public class UserController {
 		} catch (MessagingException mex) {
 			mex.printStackTrace();
 		}
+	}
+
+	private static String md5(String val) {
+		MessageDigest md;
+		String ret = null;
+		try {
+			md = MessageDigest.getInstance("MD5");
+			md.update(val.getBytes());
+			byte[] digest = md.digest();
+			ret = DatatypeConverter.printHexBinary(digest);
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+
+		return ret;
 	}
 }
